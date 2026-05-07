@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MixFlipMod</string>
+    <string name="xposed_description">小米 MIX Flip / MIX Flip 2 外屏增强模块</string>
+    <string name="xposed_status_active">已激活</string>
+    <string name="xposed_status_inactive">未激活</string>
+    <string name="version_format">v%1$s (%2$d)</string>
+    <string name="xposed_service_disconnected_summary">请确认模块已启用</string>
+
+    <string name="confirm">确定</string>
+    <string name="cancel">取消</string>
+    <string name="restart_title">重启 %1$s</string>
+    <string name="restart_confirm_message">确定要立即重启 %1$s 吗？</string>
+    <string name="restart_not_running">%1$s 未在运行，无需重启</string>
+    <string name="restart_no_root">未获得 Root 权限，无法重启 %1$s</string>
+    <string name="restart_failed">重启失败，请检查 Root 权限</string>
+    <string name="about">关于</string>
+    <string name="project_link">GitHub 项目地址</string>
+    <string name="project_url">https://github.com/parallelcc/MixFlipMod</string>
+    <string name="author_prefix">作者：</string>
+    <string name="author_name">Parallelc</string>
+    <string name="author_url">https://github.com/parallelcc</string>
+
+    <string name="pref_hide_outer">隐藏外屏状态</string>
+    <string name="pref_hide_outer_summary">恢复系统应用默认样式</string>
+
+    <string name="system_framework">系统框架</string>
+    <string name="system_framework_summary">system</string>
+    <string name="pref_system_compat_config">解除外屏应用限制</string>
+    <string name="pref_system_flip_continuity">合盖继续使用</string>
+    <string name="pref_system_flip_continuity_summary">覆盖系统设置，所有应用合盖继续使用</string>
+    <string name="pref_system_flip_ime_pkg">外屏输入法</string>
+    <string name="ime_select_default">默认</string>
+    <string name="pref_flip_screen_mode">外屏应用缩放模式</string>
+    <string name="flip_screen_mode_default">默认</string>
+    <string name="flip_screen_mode_no_scale">不缩放</string>
+    <string name="flip_screen_mode_scale">缩放</string>
+    <string name="search_apps">搜索应用</string>
+    <string name="show_system_apps">显示系统应用</string>
+    <string name="refresh_pulling">下拉刷新</string>
+    <string name="refresh_release">释放刷新</string>
+    <string name="refresh_refreshing">正在刷新</string>
+    <string name="refresh_complete">刷新成功</string>
+    <string name="app_list_loading">正在加载应用</string>
+    <string name="app_list_empty">没有找到应用</string>
+    <string name="app_list_load_failed">应用列表加载失败</string>
+
+    <string name="pref_sysui_notification">恢复外屏通知长按菜单</string>
+    <string name="pref_sysui_control_center">恢复外屏控制中心样式</string>
+    <string name="pref_sysui_control_center_summary">恢复融合设备中心、内屏磁贴及长按功能</string>
+    <string name="pref_sysui_status_bar_clock">隐藏外屏状态栏时钟</string>
+    <string name="pref_sysui_status_bar_icon_max">外屏通知图标最大数量</string>
+
+    <string name="pref_fliphome_no_start_page">屏蔽特殊应用外屏启动页</string>
+    <string name="pref_fliphome_no_start_page_summary">米家、微博、网易云音乐等</string>
+
+    <string name="cd_back">返回</string>
+    <string name="cd_restart">重启</string>
+</resources>
