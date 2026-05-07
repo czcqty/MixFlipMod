@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import com.parallelc.mixflipmod.Prefs
+import com.parallelc.mixflipmod.Prefs.FlipScreenMode
 import com.parallelc.mixflipmod.hook.util.after
 import com.parallelc.mixflipmod.hook.util.findClass
 import com.parallelc.mixflipmod.hook.util.hook
@@ -100,20 +101,21 @@ object SystemHook {
 
     private fun ActivityInfo.applyFlipScreenMode() {
         val mode = flipScreenModeFor(packageName)
-        if (mode == Prefs.FLIP_SCREEN_MODE_DEFAULT) return
+        if (mode == FlipScreenMode.DEFAULT) return
         val data = metaData ?: Bundle().also { metaData = it }
-        data.putInt(FLIP_SCREEN_META_DATA, mode)
+        data.putInt(FLIP_SCREEN_META_DATA, mode.prefValue)
     }
 
     private fun ApplicationInfo.applyFlipScreenMode() {
         val mode = flipScreenModeFor(packageName)
-        if (mode == Prefs.FLIP_SCREEN_MODE_DEFAULT) return
+        if (mode == FlipScreenMode.DEFAULT) return
         val data = metaData ?: Bundle().also { metaData = it }
-        data.putInt(FLIP_SCREEN_META_DATA, mode)
+        data.putInt(FLIP_SCREEN_META_DATA, mode.prefValue)
     }
 
-    private fun flipScreenModeFor(packageName: String): Int {
-        return prefInt(Prefs.flipScreenModeKey(packageName), Prefs.FLIP_SCREEN_MODE_DEFAULT)
+    private fun flipScreenModeFor(packageName: String): FlipScreenMode {
+        return FlipScreenMode.fromPref(prefInt(Prefs.flipScreenModeKey(packageName), FlipScreenMode.DEFAULT.prefValue))
+            ?: FlipScreenMode.DEFAULT
     }
 
     private fun flipInputMethodPackage(): String {

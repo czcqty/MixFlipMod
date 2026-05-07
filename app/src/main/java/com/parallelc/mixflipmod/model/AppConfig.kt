@@ -34,6 +34,12 @@ sealed class ConfigNode {
     ) : ConfigNode()
 }
 
+sealed class OptionValue {
+    data class Str(val value: String) : OptionValue()
+    data class IntVal(val value: Int) : OptionValue()
+    data class FloatVal(val value: Float) : OptionValue()
+}
+
 sealed class PrefSpec {
     abstract val prefKey: String
     @get:StringRes
@@ -64,11 +70,24 @@ sealed class PrefSpec {
         val defaultValue: String = "",
     ) : PrefSpec()
 
-    data class ImeSelect(
+    data class OptionSelect(
         override val prefKey: String,
         @param:StringRes override val titleRes: Int,
         @param:StringRes override val summaryRes: Int? = null,
-    ) : PrefSpec()
+        val defaultValue: OptionValue,
+        val options: List<Option> = emptyList(),
+        val source: Source = Source.Static,
+    ) : PrefSpec() {
+        data class Option(
+            val value: OptionValue,
+            @param:StringRes val labelRes: Int,
+        )
+
+        enum class Source {
+            Static,
+            InputMethods,
+        }
+    }
 }
 
 private fun hideOuterConfig(packageName: String) = AppConfig(
@@ -93,9 +112,14 @@ private val systemFrameworkConfig = AppConfig(
     prefs = listOf(
         PrefSpec.Switch(Prefs.SYSTEM_COMPAT_CONFIG, R.string.pref_system_compat_config),
         PrefSpec.Switch(Prefs.SYSTEM_FLIP_CONTINUITY, R.string.pref_system_flip_continuity, R.string.pref_system_flip_continuity_summary),
-        PrefSpec.ImeSelect(
+        PrefSpec.OptionSelect(
             Prefs.SYSTEM_FLIP_IME_PKG,
             R.string.pref_system_flip_ime_pkg,
+            defaultValue = OptionValue.Str(""),
+            options = listOf(
+                PrefSpec.OptionSelect.Option(OptionValue.Str(""), R.string.ime_select_default),
+            ),
+            source = PrefSpec.OptionSelect.Source.InputMethods,
         ),
     ),
 )

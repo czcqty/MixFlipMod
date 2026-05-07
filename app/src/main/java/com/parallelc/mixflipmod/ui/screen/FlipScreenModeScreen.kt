@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.parallelc.mixflipmod.Prefs
+import com.parallelc.mixflipmod.Prefs.FlipScreenMode
 import com.parallelc.mixflipmod.R
 import com.parallelc.mixflipmod.ui.component.AppIcon
 import com.parallelc.mixflipmod.ui.model.InstalledApp
@@ -97,7 +98,7 @@ fun FlipScreenModeScreen(
             .filterByQuery(query)
             .sortedWith(
                 compareByDescending<InstalledApp> {
-                    prefs.getInt(Prefs.flipScreenModeKey(it.packageName), Prefs.FLIP_SCREEN_MODE_DEFAULT) != Prefs.FLIP_SCREEN_MODE_DEFAULT
+                    prefs.getInt(Prefs.flipScreenModeKey(it.packageName), FlipScreenMode.DEFAULT.prefValue) != FlipScreenMode.DEFAULT.prefValue
                 }.thenBy { it.label.lowercase() }.thenBy { it.packageName }
             )
     }
@@ -184,11 +185,11 @@ fun FlipScreenModeScreen(
                         else -> items(visibleApps) { app ->
                             FlipScreenModeAppItem(
                                 app = app,
-                                mode = prefs.getInt(Prefs.flipScreenModeKey(app.packageName), Prefs.FLIP_SCREEN_MODE_DEFAULT),
+                                mode = FlipScreenMode.fromPref(prefs.getInt(Prefs.flipScreenModeKey(app.packageName), FlipScreenMode.DEFAULT.prefValue)) ?: FlipScreenMode.DEFAULT,
                                 onModeSelected = { mode ->
                                     prefs.edit {
                                         val key = Prefs.flipScreenModeKey(app.packageName)
-                                        if (mode == Prefs.FLIP_SCREEN_MODE_DEFAULT) remove(key) else putInt(key, mode)
+                                        if (mode == FlipScreenMode.DEFAULT) remove(key) else putInt(key, mode.prefValue)
                                     }
                                     runCatching { checkScope(XposedServiceState.service, "system", true) }
                                     modeVersion++
@@ -205,8 +206,8 @@ fun FlipScreenModeScreen(
 @Composable
 private fun FlipScreenModeAppItem(
     app: InstalledApp,
-    mode: Int,
-    onModeSelected: (Int) -> Unit,
+    mode: FlipScreenMode,
+    onModeSelected: (FlipScreenMode) -> Unit,
 ) {
     val pm = LocalContext.current.packageManager
     var showDropdown by remember { mutableStateOf(false) }
@@ -243,7 +244,7 @@ private fun FlipScreenModeAppItem(
                     ) {
                         Text(
                             text = flipScreenModeLabel(mode),
-                            color = if (mode == Prefs.FLIP_SCREEN_MODE_DEFAULT) {
+                            color = if (mode == FlipScreenMode.DEFAULT) {
                                 colorScheme.onSurfaceVariantSummary
                             } else {
                                 colorScheme.primary
@@ -298,21 +299,17 @@ private fun MessageItem(text: String) {
 }
 
 @Composable
-private fun flipScreenModeOptions(): List<Pair<Int, String>> {
-    return listOf(
-        Prefs.FLIP_SCREEN_MODE_DEFAULT to stringResource(R.string.flip_screen_mode_default),
-        Prefs.FLIP_SCREEN_MODE_NO_SCALE to stringResource(R.string.flip_screen_mode_no_scale),
-        Prefs.FLIP_SCREEN_MODE_SCALE to stringResource(R.string.flip_screen_mode_scale),
-    )
+private fun flipScreenModeOptions(): List<Pair<FlipScreenMode, String>> {
+    return FlipScreenMode.entries.map { it to flipScreenModeLabel(it) }
 }
 
 @Composable
-private fun flipScreenModeLabel(mode: Int): String {
+private fun flipScreenModeLabel(mode: FlipScreenMode): String {
     return when (mode) {
-        Prefs.FLIP_SCREEN_MODE_NO_SCALE -> stringResource(R.string.flip_screen_mode_no_scale)
-        Prefs.FLIP_SCREEN_MODE_SCALE -> stringResource(R.string.flip_screen_mode_scale)
+        FlipScreenMode.NO_SCALE -> stringResource(R.string.flip_screen_mode_no_scale)
+        FlipScreenMode.SCALE -> stringResource(R.string.flip_screen_mode_scale)
         else -> stringResource(R.string.flip_screen_mode_default)
     }
 }
 
-private const val FLIP_SCREEN_MODE_OPTION_COUNT = 3
+private const val FLIP_SCREEN_MODE_OPTION_COUNT = 4

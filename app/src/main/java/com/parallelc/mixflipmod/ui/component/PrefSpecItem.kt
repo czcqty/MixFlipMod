@@ -27,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.edit
-import com.parallelc.mixflipmod.R
+import com.parallelc.mixflipmod.model.OptionValue
 import com.parallelc.mixflipmod.model.PrefSpec
 import com.parallelc.mixflipmod.ui.util.checkScope
 import io.github.libxposed.service.XposedService
@@ -44,6 +44,8 @@ import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import kotlin.math.roundToInt
+
+private data class UiOption(val value: OptionValue, val label: String)
 
 @Composable
 fun PrefSpecItem(
@@ -138,23 +140,37 @@ fun PrefSpecItem(
                 },
             )
         }
-        is PrefSpec.ImeSelect -> {
+        is PrefSpec.OptionSelect -> {
             val context = LocalContext.current
             val pm = context.packageManager
-            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            val imeOptions = remember {
-                imm.inputMethodList
-                    .groupBy { it.serviceInfo.packageName }
-                    .map { (pkg, methods) -> pkg to methods.first().loadLabel(pm).toString() }
-                    .sortedBy { it.second.lowercase() }
+            val staticOptions = spec.options.map { UiOption(it.value, stringResource(it.labelRes)) }
+            val dynamicOptions = when (spec.source) {
+                PrefSpec.OptionSelect.Source.Static -> emptyList()
+                PrefSpec.OptionSelect.Source.InputMethods -> {
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                    remember {
+                        imm.inputMethodList
+                            .groupBy { it.serviceInfo.packageName }
+                            .map { (pkg, methods) -> UiOption(OptionValue.Str(pkg), methods.first().loadLabel(pm).toString()) }
+                            .sortedBy { it.label.lowercase() }
+                    }
+                }
             }
-            val optionCount = imeOptions.size + 1
-            var stored by remember { mutableStateOf(prefs.getString(spec.prefKey, "") ?: "") }
+            val options = staticOptions + dynamicOptions
+            var stored by remember {
+                val initial = when (spec.defaultValue) {
+                    is OptionValue.Str -> OptionValue.Str(prefs.getString(spec.prefKey, spec.defaultValue.value) ?: spec.defaultValue.value)
+                    is OptionValue.IntVal -> OptionValue.IntVal(prefs.getInt(spec.prefKey, spec.defaultValue.value))
+                    is OptionValue.FloatVal -> OptionValue.FloatVal(prefs.getFloat(spec.prefKey, spec.defaultValue.value))
+                }
+                mutableStateOf(initial)
+            }
             var showDropdown by remember { mutableStateOf(false) }
-            val currentLabel = if (stored.isEmpty()) null
-                else imeOptions.find { it.first == stored }?.second ?: stored
+            val selectedOption = options.firstOrNull { it.value == stored }
+                ?: options.firstOrNull { it.value == spec.defaultValue }
             BasicComponent(
                 title = stringResource(spec.titleRes),
+                summary = spec.summaryRes?.let { stringResource(it) },
                 endActions = {
                     Box {
                         OverlayListPopup(
@@ -163,26 +179,19 @@ fun PrefSpecItem(
                             onDismissRequest = { showDropdown = false },
                         ) {
                             ListPopupColumn {
-                                DropdownImpl(
-                                    text = stringResource(R.string.ime_select_default),
-                                    optionSize = optionCount,
-                                    isSelected = stored.isEmpty(),
-                                    index = 0,
-                                    onSelectedIndexChange = {
-                                        stored = ""
-                                        prefs.edit { putString(spec.prefKey, "") }
-                                        showDropdown = false
-                                    },
-                                )
-                                imeOptions.forEachIndexed { index, (pkg, label) ->
+                                options.forEachIndexed { index, option ->
                                     DropdownImpl(
-                                        text = label,
-                                        optionSize = optionCount,
-                                        isSelected = stored == pkg,
-                                        index = index + 1,
+                                        text = option.label,
+                                        optionSize = options.size,
+                                        isSelected = stored == option.value,
+                                        index = index,
                                         onSelectedIndexChange = {
-                                            stored = pkg
-                                            prefs.edit { putString(spec.prefKey, pkg) }
+                                            stored = option.value
+                                            when (option.value) {
+                                                is OptionValue.Str -> prefs.edit { putString(spec.prefKey, option.value.value) }
+                                                is OptionValue.IntVal -> prefs.edit { putInt(spec.prefKey, option.value.value) }
+                                                is OptionValue.FloatVal -> prefs.edit { putFloat(spec.prefKey, option.value.value) }
+                                            }
                                             showDropdown = false
                                         },
                                     )
@@ -194,8 +203,8 @@ fun PrefSpecItem(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = currentLabel ?: stringResource(R.string.ime_select_default),
-                                color = if (stored.isEmpty()) colorScheme.onSurfaceVariantSummary else colorScheme.primary,
+                                text = selectedOption?.label ?: "",
+                                color = if (stored == spec.defaultValue) colorScheme.onSurfaceVariantSummary else colorScheme.primary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                             )

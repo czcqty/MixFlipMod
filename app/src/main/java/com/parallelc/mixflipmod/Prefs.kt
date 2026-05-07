@@ -24,9 +24,15 @@ object Prefs {
     const val HIDE_OUTER_DPI = 340
     fun hideOuterKey(pkg: String) = "$HIDE_OUTER_PREFIX$pkg"
 
-    const val FLIP_SCREEN_MODE_DEFAULT = -1
-    const val FLIP_SCREEN_MODE_NO_SCALE = 1
-    const val FLIP_SCREEN_MODE_SCALE = 2
+    enum class FlipScreenMode(val prefValue: Int) {
+        DEFAULT(-1),
+        NO_SCALE(1),
+        SCALE(2);
+
+        companion object {
+            fun fromPref(value: Int) = entries.firstOrNull { it.prefValue == value }
+        }
+    }
     private const val FLIP_SCREEN_MODE_PREFIX = "flip_screen_mode_"
     fun flipScreenModeKey(pkg: String) = "$FLIP_SCREEN_MODE_PREFIX$pkg"
 
