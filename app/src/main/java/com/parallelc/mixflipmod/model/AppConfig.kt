@@ -160,6 +160,7 @@ private val flipHomeConfig = AppConfig(
             ),
         ),
         PrefSpec.Switch(Prefs.FLIPHOME_RECENTS_LONG_PRESS_MENU, R.string.pref_fliphome_recents_long_press_menu, R.string.pref_fliphome_recents_long_press_menu_summary),
+        PrefSpec.Switch(Prefs.FLIPHOME_APP_LONG_PRESS_MENU, R.string.pref_fliphome_app_long_press_menu, R.string.pref_fliphome_app_long_press_menu_summary),
     ),
 )
 

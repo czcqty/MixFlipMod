@@ -59,6 +59,8 @@
     <string name="recents_style_horizontal">横向</string>
     <string name="pref_fliphome_recents_long_press_menu">最近任务长按功能</string>
     <string name="pref_fliphome_recents_long_press_menu_summary">纵向显示功能按钮，横向打开应用信息</string>
+    <string name="pref_fliphome_app_long_press_menu">应用桌面长按菜单</string>
+    <string name="pref_fliphome_app_long_press_menu_summary">增加应用信息选项</string>
 
     <string name="cd_back">返回</string>
     <string name="cd_restart">重启</string>

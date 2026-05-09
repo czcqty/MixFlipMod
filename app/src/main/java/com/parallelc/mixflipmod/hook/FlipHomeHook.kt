@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.UserHandle
 import android.provider.Settings
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -19,6 +20,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupWindow
+import android.widget.TextView
 import androidx.core.net.toUri
 import com.parallelc.mixflipmod.Prefs
 import com.parallelc.mixflipmod.hook.util.after
@@ -37,9 +39,13 @@ import kotlin.math.abs
 
 object FlipHomeHook : BaseHook() {
     override val targetPackages = listOf("com.miui.fliphome")
-    private const val TASK_STACK_VIEW_CLASS = "com.miui.fliphome.recents.views.TaskStackView"
+    private const val SYSTEM_HOME_PACKAGE = "com.miui.home"
     private const val RECENTS_CONTAINER_CLASS = "com.miui.fliphome.recents.views.RecentsContainer"
+    private const val TASK_STACK_VIEW_CLASS = "com.miui.fliphome.recents.views.TaskStackView"
+    private const val APP_DETAILS_ICON = "shortcut_menu_app_details_icon"
     private const val RECENTS_MENU_BACKGROUND = "recent_menu_bg"
+    private const val APP_SHORTCUT_EXTRA_MENU_TAG = "mixflipmod_app_shortcut_extra_menu"
+    private const val APP_SHORTCUT_ORIGINAL_MENU_TAG = "mixflipmod_app_shortcut_original_menu"
     private val recentsTaskMenus = WeakHashMap<View, RecentsTaskMenuHandle>()
 
     private data class TaskViewState(
@@ -85,6 +91,7 @@ object FlipHomeHook : BaseHook() {
             Prefs.FLIPHOME_NO_START_PAGE -> hookNoStartPage(param)
             Prefs.FLIPHOME_RECENTS_STYLE -> hookRecentsStyle(param)
             Prefs.FLIPHOME_RECENTS_LONG_PRESS_MENU -> hookRecentsLongPressMenu(param)
+            Prefs.FLIPHOME_APP_LONG_PRESS_MENU -> hookAppLongPressMenu(param)
         }
     }
 
@@ -209,6 +216,187 @@ object FlipHomeHook : BaseHook() {
                 dismissAllRecentsTaskMenus()
             } else {
                 chain.proceed()
+            }
+        }
+    }
+
+    private fun hookAppLongPressMenu(param: PackageReadyParam) {
+        val fragmentClass = param.classLoader.findClass("com.miui.FlipLauncherFragment")
+        val viewHolderClass = param.classLoader.findClass($$"com.miui.fliphome.adapter.FlipLauncherAdapter$FlipLauncherViewHolder")
+        hook(fragmentClass.method("showShortcutMenu", viewHolderClass), after { chain, result ->
+            val fragment = chain.thisObject
+            val holder = chain.args.firstOrNull() ?: return@after result
+            val shortcutInfo = holder.getField("mShortcutInfo") ?: return@after result
+            val packageName = shortcutInfo.callString("getPackageName") ?: return@after result
+            val componentName = shortcutInfo.callMethod("getComponentName") as? ComponentName
+            val user = shortcutInfo.callMethod("getUser") as? UserHandle
+            val shortcutMenu = fragment.getField("mShortcutMenu") as? LinearLayout ?: return@after result
+            extendNativeAppShortcutMenu(shortcutMenu, fragment, packageName, componentName, user)
+            result
+        })
+    }
+
+    private fun extendNativeAppShortcutMenu(
+        shortcutMenu: LinearLayout,
+        fragment: Any,
+        packageName: String,
+        componentName: ComponentName?,
+        user: UserHandle?,
+    ) {
+        val context = shortcutMenu.context
+        val originalRow = prepareNativeAppShortcutMenu(shortcutMenu)
+        shortcutMenu.setOnClickListener(null)
+        shortcutMenu.isClickable = false
+        originalRow?.apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                removeNativeAppShortcut(shortcutMenu, fragment)
+            }
+        }
+        shortcutMenu.removeTaggedChildren(APP_SHORTCUT_EXTRA_MENU_TAG)
+        shortcutMenu.addView(createNativeAppShortcutMenuRow(
+            context = context,
+            referenceRow = originalRow,
+            title = "应用信息",
+            onClick = {
+                openApplicationInfo(context, packageName, componentName, user)
+                runCatching { fragment.callMethod("hideShortcutMenu") }
+            },
+        ))
+    }
+
+    private fun removeNativeAppShortcut(shortcutMenu: View, fragment: Any) {
+        runCatching {
+            val shortcut = shortcutMenu.callMethod("getCurrentShortcut") ?: return@runCatching
+            val holderPosition = shortcutMenu.callMethod("getHolderPosition") as? Int ?: -1
+            fragment.getField("mAppPresenter")?.callMethod("removeApp", shortcut)
+            fragment.getField("mAdapter")?.callMethod("onDeleteAppItem", holderPosition, shortcut)
+        }
+        runCatching { fragment.callMethod("hideShortcutMenu") }
+    }
+
+    private fun prepareNativeAppShortcutMenu(shortcutMenu: LinearLayout): LinearLayout? {
+        (0 until shortcutMenu.childCount)
+            .map { shortcutMenu.getChildAt(it) }
+            .filterIsInstance<LinearLayout>()
+            .firstOrNull { it.tag == APP_SHORTCUT_ORIGINAL_MENU_TAG }
+            ?.let {
+                shortcutMenu.orientation = LinearLayout.VERTICAL
+                return it
+            }
+        if ((0 until shortcutMenu.childCount).any { shortcutMenu.getChildAt(it).tag == APP_SHORTCUT_ORIGINAL_MENU_TAG }) {
+            shortcutMenu.orientation = LinearLayout.VERTICAL
+            return null
+        }
+        val originalChildren = (0 until shortcutMenu.childCount).map { shortcutMenu.getChildAt(it) }
+        if (originalChildren.isEmpty()) {
+            shortcutMenu.orientation = LinearLayout.VERTICAL
+            return null
+        }
+        shortcutMenu.removeAllViews()
+        shortcutMenu.orientation = LinearLayout.VERTICAL
+        val originalRow = LinearLayout(shortcutMenu.context).apply {
+            tag = APP_SHORTCUT_ORIGINAL_MENU_TAG
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            originalChildren.forEach { child ->
+                addView(child, child.layoutParams ?: LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ))
+            }
+        }
+        shortcutMenu.addView(originalRow, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+        ))
+        return originalRow
+    }
+
+    private fun ViewGroup.removeTaggedChildren(tag: String) {
+        for (index in childCount - 1 downTo 0) {
+            if (getChildAt(index).tag == tag) {
+                removeViewAt(index)
+            }
+        }
+    }
+
+    private inline fun <reified T : View> ViewGroup.firstChildOfType(): T? {
+        return (0 until childCount).firstNotNullOfOrNull { getChildAt(it) as? T }
+    }
+
+    private fun ViewGroup.LayoutParams.copyLayoutParams(): LinearLayout.LayoutParams {
+        return when (this) {
+            is LinearLayout.LayoutParams -> LinearLayout.LayoutParams(this)
+            is ViewGroup.MarginLayoutParams -> LinearLayout.LayoutParams(width, height).also {
+                it.setMargins(leftMargin, topMargin, rightMargin, bottomMargin)
+            }
+            else -> LinearLayout.LayoutParams(width, height)
+        }
+    }
+
+    private fun createNativeAppShortcutMenuRow(
+        context: Context,
+        referenceRow: LinearLayout?,
+        title: String,
+        onClick: () -> Unit,
+    ): View {
+        val referenceIcon = referenceRow?.firstChildOfType<ImageView>()
+        val referenceText = referenceRow?.firstChildOfType<TextView>()
+        return LinearLayout(context).apply {
+            tag = APP_SHORTCUT_EXTRA_MENU_TAG
+            orientation = LinearLayout.HORIZONTAL
+            gravity = referenceRow?.gravity ?: Gravity.CENTER_VERTICAL
+            isClickable = true
+            isFocusable = true
+            setPadding(
+                referenceRow?.paddingLeft ?: 0,
+                referenceRow?.paddingTop ?: 0,
+                referenceRow?.paddingRight ?: 0,
+                referenceRow?.paddingBottom ?: 0,
+            )
+            setOnClickListener { onClick() }
+
+            addView(ImageView(context).apply {
+                setImageDrawable(context.systemHomeDrawable(APP_DETAILS_ICON))
+                scaleType = referenceIcon?.scaleType ?: ImageView.ScaleType.CENTER_INSIDE
+                imageTintList = referenceIcon?.imageTintList
+                setPadding(
+                    referenceIcon?.paddingLeft ?: 0,
+                    referenceIcon?.paddingTop ?: 0,
+                    referenceIcon?.paddingRight ?: 0,
+                    referenceIcon?.paddingBottom ?: 0,
+                )
+            }, referenceIcon?.layoutParams?.copyLayoutParams() ?: LinearLayout.LayoutParams(24.dp(context), 24.dp(context)))
+            addView(TextView(context).apply {
+                text = title
+                if (referenceText != null) {
+                    setTextSize(TypedValue.COMPLEX_UNIT_PX, referenceText.textSize)
+                    setTextColor(referenceText.textColors)
+                    typeface = referenceText.typeface
+                    includeFontPadding = referenceText.includeFontPadding
+                    gravity = referenceText.gravity
+                    maxLines = referenceText.maxLines
+                    setPadding(
+                        referenceText.paddingLeft,
+                        referenceText.paddingTop,
+                        referenceText.paddingRight,
+                        referenceText.paddingBottom,
+                    )
+                } else {
+                    textSize = 14f
+                    setTextColor(context.getColorId("shortcut_menu_text_color", Color.rgb(32, 32, 32)))
+                    maxLines = 1
+                    includeFontPadding = false
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+            }, referenceText?.layoutParams?.copyLayoutParams() ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                leftMargin = 8.dp(context)
+            })
+            layoutParams = (referenceRow?.layoutParams?.copyLayoutParams()
+                ?: LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)).apply {
+                topMargin = 16.dp(context)
             }
         }
     }
@@ -614,6 +802,10 @@ object FlipHomeHook : BaseHook() {
 
     private fun Any.isLocked(): Boolean = getField("isLocked") as? Boolean ?: false
 
+    private fun Any.callString(methodName: String): String? {
+        return runCatching { callMethod(methodName) as? String }.getOrNull()
+    }
+
     private var getFlipAppInstance: Method? = null
     private var getBaseGesture: Method? = null
     private var getLayoutStyle: Method? = null
@@ -679,6 +871,19 @@ object FlipHomeHook : BaseHook() {
 
     private fun Context.drawableId(name: String, fallback: Int): Int {
         return resources.getIdentifier(name, "drawable", packageName).takeIf { it != 0 } ?: fallback
+    }
+
+    private fun Context.systemHomeDrawable(name: String): android.graphics.drawable.Drawable? {
+        return runCatching {
+            val homeContext = createPackageContext(SYSTEM_HOME_PACKAGE, 0)
+            val resId = homeContext.resources.getIdentifier(name, "drawable", SYSTEM_HOME_PACKAGE)
+            if (resId != 0) homeContext.getDrawable(resId) else null
+        }.getOrNull()
+    }
+
+    private fun Context.getColorId(name: String, fallback: Int): Int {
+        val resId = resources.getIdentifier(name, "color", packageName)
+        return if (resId != 0) getColor(resId) else fallback
     }
 
     private fun Context.drawableOrCircle(name: String, itemSize: Int): android.graphics.drawable.Drawable {
