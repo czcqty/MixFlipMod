@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.os.Bundle
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import com.parallelc.mixflipmod.Prefs
 import com.parallelc.mixflipmod.Prefs.FlipScreenMode
 import com.parallelc.mixflipmod.hook.util.after
@@ -234,6 +235,9 @@ object SystemHook {
 
     private fun hookFlipInputMethod(param: SystemServerStartingParam) {
         val switcher = param.classLoader.findClass("com.android.server.inputmethod.SogouInputMethodSwitcher")
+        runCatching { module!!.deoptimize(switcher.method("getSogouMethodIdLocked")) }
+        runCatching { module!!.deoptimize(switcher.method("mayChangeInputMethodLocked", EditorInfo::class.java)) }
+        runCatching { module!!.deoptimize(switcher.method("shouldHideImeSwitcherLocked")) }
         hook(switcher.method("isSogouMethodLocked", String::class.java)) { chain ->
             val methodId = chain.args[0] as? String ?: return@hook chain.proceed()
             val userId = chain.thisObject?.getField("mService")?.getField("mCurrentImeUserId") as? Int
@@ -244,6 +248,16 @@ object SystemHook {
 
         val immsClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerService")
         val serviceImpl = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerServiceImpl")
+        runCatching { module!!.deoptimize(serviceImpl.method("getSogouMethodIdLocked", immsClass)) }
+        runCatching { module!!.deoptimize(serviceImpl.method($$"lambda$onDisplayDeviceStateChanged$8")) }
+        runCatching {
+            val menuCtrl = param.classLoader.findClass("com.android.server.inputmethod.InputMethodMenuController")
+            val info = param.classLoader.loadClass("android.view.inputmethod.InputMethodInfo")
+            module!!.deoptimize(serviceImpl.method("showCountdownAlertDialog",
+                Int::class.javaPrimitiveType!!, menuCtrl, immsClass, info,
+                Int::class.javaPrimitiveType!!, android.content.Context::class.java,
+                String::class.java, java.util.List::class.java))
+        }
         hook(serviceImpl.method("isSogouMethodLocked", immsClass, String::class.java)) { chain ->
             val service = chain.args[0] ?: return@hook chain.proceed()
             val methodId = chain.args[1] as? String ?: return@hook chain.proceed()
