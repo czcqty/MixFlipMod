@@ -144,12 +144,19 @@ object SystemHook {
             result
         })
 
+        val sizeCompatStub = param.classLoader.findClass("android.sizecompat.MiuiAppSizeCompatModeStub")
+        val getSizeCompatStub = sizeCompatStub.method("get")
+        isFlipFolded = {
+            runCatching { getSizeCompatStub.invoke(null)?.callMethod("isFlipFolded") as? Boolean ?: false }.getOrDefault(false)
+        }
+
         val activityRecord = param.classLoader.findClass("com.android.server.wm.ActivityRecord")
         val atmsImpl = param.classLoader.findClass("com.android.server.wm.ActivityTaskManagerServiceImpl")
         val controller = param.classLoader.findClass("com.android.server.wm.BoundsCompatController")
         val windowLayout = param.classLoader.findClass("android.view.WindowLayoutStubImpl")
 
         hook(controller.method("canUseFixedAspectRatio", Configuration::class.java), after { chain, result ->
+            if (!isFlipFolded()) return@after result
             val packageName = activityPackageName(chain.thisObject?.getField("mOwner"))
             when (packageName?.let { flipScreenModeFor(it) }) {
                 FlipScreenMode.FULL_SCREEN -> false
@@ -159,6 +166,7 @@ object SystemHook {
             }
         })
         hook(atmsImpl.method("getGlobalScale", activityRecord), after { chain, result ->
+            if (!isFlipFolded()) return@after result
             val packageName = activityPackageName(chain.args[0]) ?: return@after result
             when (flipScreenModeFor(packageName)) {
                 FlipScreenMode.NO_SCALE -> FLIP_UNSCALE
@@ -167,6 +175,7 @@ object SystemHook {
             }
         })
         hook(windowLayout.method("getLayoutInDisplayCutoutMode", WindowManager.LayoutParams::class.java)) { chain ->
+            if (!isFlipFolded()) return@hook chain.proceed()
             val attrs = chain.args[0] as? WindowManager.LayoutParams
             val packageName = attrs?.packageName
             val mode = packageName?.let { flipScreenModeFor(it) }
@@ -306,4 +315,5 @@ object SystemHook {
     @Volatile
     private var flipScreenScaleCache: Map<String, Float> = emptyMap()
     private var systemPrefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
+    private var isFlipFolded: () -> Boolean = { false }
 }

@@ -63,23 +63,15 @@ class InstalledAppsState internal constructor(
 
     private suspend fun loadInstalledApps(refresh: Boolean = false) {
         if (refresh) isRefreshing = true else isLoading = true
-        try {
-            runCatching { loadInstalledApps(packageManager, selfPackageName) }
-                .onSuccess {
-                    apps = it
-                    error = null
-                }
-                .onFailure {
-                    if (it is CancellationException) throw it
-                    error = it
-                }
-        } finally {
-            if (refresh) {
-                isRefreshing = false
-            } else {
-                isLoading = false
+        runCatching { loadInstalledApps(packageManager, selfPackageName) }
+            .onSuccess {
+                apps = it
+                error = null
             }
-        }
+            .onFailure {
+                if (it !is CancellationException) error = it
+            }
+            .also { if (refresh) isRefreshing = false else isLoading = false }
     }
 
     fun onPermissionResult(granted: Boolean) {
