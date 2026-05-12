@@ -8,6 +8,7 @@ compose-bom = "2026.05.00"
 activity-compose = "1.13.0"
 lifecycle-runtime-ktx = "2.10.0"
 activityKtx = "1.13.0"
+dexkit = "2.2.0"
 
 [libraries]
 androidx-activity-ktx = { group = "androidx.activity", name = "activity-ktx", version.ref = "activityKtx" }
@@ -22,6 +23,7 @@ libxposed-service = { group = "io.github.libxposed", name = "service", version.r
 compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity-compose" }
 lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle-runtime-ktx" }
+dexkit = { group = "org.luckypray", name = "dexkit", version.ref = "dexkit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

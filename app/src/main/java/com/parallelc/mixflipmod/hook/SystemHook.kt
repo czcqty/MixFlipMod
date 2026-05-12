@@ -9,11 +9,11 @@ import android.content.res.Configuration
 import android.provider.Settings
 import android.os.Bundle
 import android.view.WindowManager
-import android.view.inputmethod.EditorInfo
 import com.parallelc.mixflipmod.Prefs
 import com.parallelc.mixflipmod.Prefs.FlipScreenMode
 import com.parallelc.mixflipmod.hook.util.after
 import com.parallelc.mixflipmod.hook.util.callMethod
+import com.parallelc.mixflipmod.hook.util.createDexKitBridge
 import com.parallelc.mixflipmod.hook.util.findClass
 import com.parallelc.mixflipmod.hook.util.getField
 import com.parallelc.mixflipmod.hook.util.hook
@@ -247,36 +247,41 @@ object SystemHook {
 
     private fun hookFlipInputMethod(param: SystemServerStartingParam) {
         val switcher = param.classLoader.findClass("com.android.server.inputmethod.SogouInputMethodSwitcher")
-        runCatching { module!!.deoptimize(switcher.method("getSogouMethodIdLocked")) }
-        runCatching { module!!.deoptimize(switcher.method("mayChangeInputMethodLocked", EditorInfo::class.java)) }
-        runCatching { module!!.deoptimize(switcher.method("shouldHideImeSwitcherLocked")) }
-        hook(switcher.method("isSogouMethodLocked", String::class.java)) { chain ->
+        val immsClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerService")
+        inputMethodServiceImplClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerServiceImpl")
+        inputMethodSettingsRepositoryClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodSettingsRepository")
+
+        val switcherIsSogou = switcher.method("isSogouMethodLocked", String::class.java)
+        val serviceImplIsSogou = inputMethodServiceImplClass!!.method("isSogouMethodLocked", immsClass, String::class.java)
+
+        createDexKitBridge(param.classLoader).use { bridge ->
+            listOf(switcherIsSogou, serviceImplIsSogou).forEach { target ->
+                bridge.findMethod {
+                    matcher {
+                        invokeMethods {
+                            add {
+                                declaredClass(target.declaringClass.name)
+                                name = target.name
+                            }
+                        }
+                    }
+                }.forEach { runCatching { module!!.deoptimize(it.getMethodInstance(param.classLoader)) } }
+            }
+        }
+
+        hook(switcherIsSogou) { chain ->
             val methodId = chain.args[0] as? String ?: return@hook chain.proceed()
             val userId = chain.thisObject?.getField("mService")?.getField("mCurrentImeUserId") as? Int
                 ?: return@hook chain.proceed()
-            inputMethodPackage(param, methodId, userId)?.let { it == flipInputMethodPackageCache }
+            inputMethodPackage(methodId, userId)?.let { it == flipInputMethodPackageCache }
                 ?: chain.proceed()
         }
 
-        val immsClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerService")
-        val serviceImpl = param.classLoader.findClass("com.android.server.inputmethod.InputMethodManagerServiceImpl")
-        inputMethodServiceImplClass = serviceImpl
-        inputMethodSettingsRepositoryClass = param.classLoader.findClass("com.android.server.inputmethod.InputMethodSettingsRepository")
-        runCatching { module!!.deoptimize(serviceImpl.method("getSogouMethodIdLocked", immsClass)) }
-        runCatching { module!!.deoptimize(serviceImpl.method($$"lambda$onDisplayDeviceStateChanged$8")) }
-        runCatching {
-            val menuCtrl = param.classLoader.findClass("com.android.server.inputmethod.InputMethodMenuController")
-            val info = param.classLoader.loadClass("android.view.inputmethod.InputMethodInfo")
-            module!!.deoptimize(serviceImpl.method("showCountdownAlertDialog",
-                Int::class.javaPrimitiveType!!, menuCtrl, immsClass, info,
-                Int::class.javaPrimitiveType!!, android.content.Context::class.java,
-                String::class.java, java.util.List::class.java))
-        }
-        hook(serviceImpl.method("isSogouMethodLocked", immsClass, String::class.java)) { chain ->
+        hook(serviceImplIsSogou) { chain ->
             val service = chain.args[0] ?: return@hook chain.proceed()
             val methodId = chain.args[1] as? String ?: return@hook chain.proceed()
             val userId = service.getField("mCurrentImeUserId") as? Int ?: return@hook chain.proceed()
-            inputMethodPackage(param, methodId, userId)?.let { it == flipInputMethodPackageCache }
+            inputMethodPackage(methodId, userId)?.let { it == flipInputMethodPackageCache }
                 ?: chain.proceed()
         }
     }
@@ -288,7 +293,7 @@ object SystemHook {
             ?: Prefs.DEFAULT_FLIP_IME_PKG
     }
 
-    private fun inputMethodPackage(param: SystemServerStartingParam, methodId: String, userId: Int): String? {
+    private fun inputMethodPackage(methodId: String, userId: Int): String? {
         val repository = inputMethodSettingsRepositoryClass ?: return null
         val settings = repository.method("get", Int::class.java).invoke(null, userId) ?: return null
         val imi = settings.callMethod("getMethodMap")?.callMethod("get", methodId) ?: return null

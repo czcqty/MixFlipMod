@@ -77,4 +77,5 @@ dependencies {
     implementation(libs.miuix.icons)
     compileOnly(libs.libxposed.api)
     implementation(libs.libxposed.service)
+    implementation(libs.dexkit)
 }
